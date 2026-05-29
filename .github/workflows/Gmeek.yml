@@ -6,13 +6,16 @@ on:
     types: [opened, edited]
   schedule:
     - cron: "0 16 * * *"
-    
+
 jobs:
   build:
     name: Generate blog
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04  # 修正：降级到稳定兼容版本
     if: ${{ github.event.repository.owner.id == github.event.sender.id || github.event_name == 'schedule' }}
-    permissions: write-all
+    permissions:
+      contents: write  # 修正：最小权限原则
+      pages: write
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,23 +26,27 @@ jobs:
 
       - name: Get config.json
         run: |
-          echo "====== check config.josn file ======"
-          cat config.json
-          echo "====== check config.josn end  ======"
-          sudo apt-get install jq
+          echo "====== check config.json file ======"
+          cat config.json  # 修正：拼写错误
+          echo "====== check config.json end  ======"
+          sudo apt-get install -y jq
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: 3.8
+          python-version: "3.10"  # 修正：升级到兼容版本
 
       - name: Clone source code
         run: |
           GMEEK_VERSION=$(jq -r ".GMEEK_VERSION" config.json)
-          git clone https://github.com/Meekdai/Gmeek.git /opt/Gmeek;
-          cd /opt/Gmeek/
+          git clone https://github.com/Meekdai/Gmeek.git /opt/Gmeek
+          cd /opt/Gmeek
           lastTag=$(git describe --tags `git rev-list --tags --max-count=1`)
-          if [ $GMEEK_VERSION == 'last' ]; then git checkout $lastTag; else git checkout $GMEEK_VERSION; fi;
+          if [ "$GMEEK_VERSION" = "last" ]; then  # 修正：标准bash字符串比较
+            git checkout "$lastTag"
+          else
+            git checkout "$GMEEK_VERSION"
+          fi
 
       - name: Install dependencies
         run: |
@@ -48,30 +55,39 @@ jobs:
 
       - name: Generate new html
         run: |
-          cp -r ./* /opt/Gmeek/
-          cd /opt/Gmeek/
-          python Gmeek.py ${{ secrets.GITHUB_TOKEN }} ${{ github.repository }} --issue_number '${{ github.event.issue.number }}'
-          cp -a /opt/Gmeek/docs ${{ github.workspace }} 
-          cp -a /opt/Gmeek/backup ${{ github.workspace }} 
-          cp /opt/Gmeek/blogBase.json ${{ github.workspace }} 
+          # 修正：处理手动触发时issue_number为空的情况
+          if [ "${{ github.event_name }}" = "issues" ]; then
+            ISSUE_ARG="--issue_number ${{ github.event.issue.number }}"
+          else
+            ISSUE_ARG=""
+          fi
           
+          cp -r --exclude=.git ./* /opt/Gmeek/  # 修正：不复制.git目录
+          cd /opt/Gmeek
+          python Gmeek.py \
+            ${{ secrets.GITHUB_TOKEN }} \
+            ${{ github.repository }} \
+            $ISSUE_ARG
+          cp -a /opt/Gmeek/docs ${{ github.workspace }}
+          cp -a /opt/Gmeek/backup ${{ github.workspace }}
+          cp /opt/Gmeek/blogBase.json ${{ github.workspace }}
+
       - name: update html
         run: |
           git config --local user.email "$(jq -r ".email" config.json)"
           git config --local user.name "${{ github.repository_owner }}"
           git add .
-          git commit -a -m '🎉auto update by Gmeek action' || echo "nothing to commit"
+          git commit -a -m 'auto update by Gmeek action' || echo "nothing to commit"
           git push || echo "nothing to push"
-          sleep 3
-          
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: 'docs/.'
-          
+
   deploy:
     name: Deploy blog
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     needs: build
     permissions:
       contents: write
