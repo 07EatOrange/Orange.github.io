@@ -55,11 +55,14 @@ jobs:
 
       - name: Generate new html
         run: |
-          # 先创建必要的目录
+          cp -r ./* /opt/Gmeek/
+          cd /opt/Gmeek
+          
+          # 关键：在Gmeek自己的目录里创建backup和docs
           mkdir -p backup
           mkdir -p docs
           
-          # 只有当是Issue事件时才传递issue_number，否则全局生成
+          # 只有Issue事件才传issue_number，否则全局生成
           if [ "${{ github.event_name }}" = "issues" ]; then
             python Gmeek.py ${{ secrets.GITHUB_TOKEN }} ${{ github.repository }} --issue_number ${{ github.event.issue.number }}
           else
