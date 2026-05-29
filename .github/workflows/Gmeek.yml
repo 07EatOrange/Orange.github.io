@@ -55,14 +55,14 @@ jobs:
 
       - name: Generate new html
         run: |
-          # 修正：处理手动触发时issue_number为空的情况
+          # 处理手动触发时issue_number为空的情况
           if [ "${{ github.event_name }}" = "issues" ]; then
             ISSUE_ARG="--issue_number ${{ github.event.issue.number }}"
           else
             ISSUE_ARG=""
           fi
           
-          cp -r --exclude=.git ./* /opt/Gmeek/  # 修正：不复制.git目录
+          cp -r ./* /opt/Gmeek/
           cd /opt/Gmeek
           python Gmeek.py \
             ${{ secrets.GITHUB_TOKEN }} \
